@@ -34,7 +34,7 @@ step 1: 多需求路由（schemaVersion=3 + session lock）
 step 2: 调用 tcoa-context → mode, tools, changeSize, intentMatch, sessionFocused
 
 step 3: 按 intentMatch + phase 分流
-  ├─ 调试意图（调试/报错/异常/bug/修复）→ bugfix 轻量路径：跳过 init，直接 tcoa-execute(trivial)
+  ├─ 调试意图（调试/报错/异常/bug/修复）→ bugfix 轻量路径：tcoa-context(init, trivial) → tcoa-execute(trivial)
   ├─ uninitialized / completed+新需求 → tcoa-context(init)
   ├─ 续跑 + initialized → tcoa-execute
   ├─ 续跑 + branching → tcoa-git-flow（继续建分支）

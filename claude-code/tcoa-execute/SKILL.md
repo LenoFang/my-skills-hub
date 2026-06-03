@@ -18,13 +18,42 @@ description: "[内部 skill，由 tcoa-router 链式调用，不应独立触发]
 - review 不可绕过：结束必须写 phase = `awaiting-review`
 - 降级必须留痕：写入 degradations + changelog
 - 失败立即停止：gsd 失败 → phase = `paused`
-- 工具命令从 `.tcoa/project-config.json` 读取，不硬编码
+- 工具命令从 `.tcoa/command-registry.json` 读取，不硬编码
 
-## GitNexus 影响预检（仅 medium/large）
+## 步骤宣告（用户可读）
+
+每个关键阶段开始时输出用户可读宣告（与输出契约并存）：
+
+| 阶段 | 宣告格式 |
+|------|----------|
+| 影响预检 | `▶ 正在进行 GitNexus 影响预检` |
+| 读取回执 | `▶ 正在读取业务代码` |
+| 编码实现 | `▶ 正在进行编码实现` |
+| 转入审查 | `▶ 编码完成，转入代码审查` |
+
+**要求**：宣告必须在对应阶段开始时输出，不得省略或合并。
+
+## GitNexus 影响预检（trivial/small 轻量，medium/large 完整）
 改动前对主目标符号执行 `gitnexus_impact`：
-- LOW → 继续
-- MEDIUM → 继续，snapshot §4 记录
-- HIGH/CRITICAL → AskUserQuestion 确认
+- trivial/small → 仅检查 d=1 直接依赖（`maxDepth: 1`），LOW/MEDIUM 直接继续，HIGH/CRITICAL 提示用户
+- medium/large → 完整检查（`maxDepth: 2`），HIGH/CRITICAL → AskUserQuestion 确认
+- 目标符号未被索引 → 跳过并 warning，不阻塞
+
+## 编码前轻量回执（仅 medium/large）
+
+影响预检通过后、编码前，输出一行回执确认已读取关键代码：
+
+```
+[读取回执] Entity: <名称> ✓ | Service: <名称> ✓ | Rules: R-FORCE-001/002 ✓
+```
+
+**来源优先级**：
+1. `.tcoa/grill-result.json` 的 coreEntities/coreServices
+2. `proposal.md` §代码上下文
+3. 无上述来源时，从 business-rules-mapping grep 关键词
+4. grep 也无法定位时，输出 `[读取回执] 无法定位核心符号，跳过` 并继续
+
+**门禁**：medium/large 未输出回执不得开始编码。trivial/small 可跳过。
 
 ## Graphify 模块视图提示（跨模块时）
 从 `.tcoa/project-config.json` 的 `projectModules` 读取模块列表。
@@ -51,7 +80,7 @@ description: "[内部 skill，由 tcoa-router 链式调用，不应独立触发]
 ### auto 模式
 | changeSize | 流程 |
 |---|---|
-| trivial | 不应进入本 skill |
+| trivial | 轻量路径：impact(d=1) → 直接改动 → awaiting-review |
 | small | registry→gsd.quick → awaiting-review |
 | medium | registry→openspec.propose → registry→gsd.quick --validate → awaiting-review |
 | large | 并行 SubAgent(openspec+superpowers) → 直接 Skill(gsd.quick --full) → awaiting-review |
@@ -66,7 +95,7 @@ description: "[内部 skill，由 tcoa-router 链式调用，不应独立触发]
 
 ## 工具引用方式（从 registry）
 ```
-registry = 读取 .tcoa/project-config.json
+registry = 读取 .tcoa/command-registry.json
 cmd = registry["tools"]["gsd"]["commands"]["quick"]
 Skill(skill=cmd["skill"], args=cmd["flags"][changeSize])
 ```
@@ -77,6 +106,38 @@ Skill(skill=cmd["skill"], args=cmd["flags"][changeSize])
 | gsd | 阻塞，phase → paused |
 | openspec | 降级到仅 gsd |
 | superpowers | 允许跳过 |
+
+## 三次失败停止原则（调试红线）
+
+修复同一问题时严格遵循失败次数门槛：
+
+| 失败次数 | 动作 |
+|---------|------|
+| **第 1 次** | 重新分析根因（systematic-debugging：读错误 → 追溯数据流 → 找工作示例） |
+| **第 2 次** | 换方案，寻找备选路径（不在原方案上打补丁） |
+| **第 3 次** | **停止编码，phase → paused，向用户报告架构性问题** |
+
+**触发"架构性问题"的模式**（满足任一即停止）：
+1. 链式暴露：改 A → B 报错 → 改 B → C 报错（耦合蔓延）
+2. 大规模重构：修复需改动 ≥3 个模块或 ≥5 个文件
+3. 循环症状：修复后在不同模块产生新的相同症状
+
+**报告格式**（写入 `requirements/<id>/decisions.md`）：
+```markdown
+## 三次失败停止 - <问题简述>
+- **时间**: <YYYY-MM-DD>
+- **尝试 1**: <方案> → 失败原因：<具体错误>
+- **尝试 2**: <方案> → 失败原因：<具体错误>
+- **尝试 3**: <方案> → 失败原因：<具体错误>
+- **暴露模式**: <链式暴露/大规模重构/循环症状>
+- **建议**: 停止症状修复，重新设计 <模块> 的 <边界/职责分离/数据流>
+- **预估**: 重构工作量 <文件数/天数>，需与用户确认是否值得
+```
+
+**不适用场景**（不计入失败次数）：
+- 环境问题（Node 版本、依赖缺失）
+- 配置错误（typo、路径错误）
+- 测试数据问题（mock 不匹配真实协议）
 
 ## 输出契约
 ```

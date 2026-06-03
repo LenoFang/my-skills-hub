@@ -29,6 +29,7 @@ description: "[内部 skill，由 tcoa-router 链式调用，不应独立触发]
 - 完成后：gitStatus.branchCreated=true，phase → initialized
 
 ### 2. 提交（phase: review-passed/awaiting-git）
+- **detect_changes 前置**：执行 `gitnexus_detect_changes({scope: "staged"})` 确认变更范围与预期一致；有意外文件 → AskUserQuestion 确认后继续；gitnexus 不可用时跳过，warning 提示
 - 展示 `git diff --stat`，AskUserQuestion 确认
 - 按 Conventional Commits 生成消息
 - **默认按顶级文件夹分拆 commit**（requirements/、code-backend/、front-pc/ 等各自独立）

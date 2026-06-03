@@ -147,7 +147,7 @@ intentMatch=新需求 时，在初始化前执行一次轻量检索：
 6. 追加到 `current-context.json` active[]
 7. **写入新的 session lock 文件，sessionFocused = 新需求**
 8. 写入 context-snapshot.md 和 metadata.json
-9. **创建空 decisions.md（从模板复制）**
+9. **从 `requirements/_template/` 复制模板文件**：按 changeSize 复制对应工件模板（proposal.md/design.md/tasks.md/decisions.md/lessons.md），已存在的文件不覆盖
 10. 询问是否建分支（changeSize ≥ small）
 
 changeSize=trivial 跳过本子流程。
